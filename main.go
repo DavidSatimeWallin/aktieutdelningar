@@ -13,6 +13,30 @@ import (
 	"github.com/gocolly/colly"
 )
 
+const (
+	currencyAPIURL = "http://free.currencyconverterapi.com/api/v5/convert?q=%s_SEK&compact=y"
+	baseURL        = "https://www.avanza.se"
+	dividendsPath  = "/placera/foretagskalendern/utdelningar.html"
+)
+
+var (
+	dateRegex = regexp.MustCompile(`(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})`)
+	divRegex  = regexp.MustCompile(`(?P<sum>[0-9]+,[0-9]+) (?P<curr>[A-Z]+)`)
+
+	defaultCurrencyMap = map[string]float64{
+		"NOK_SEK": 1.07517,
+		"EUR_SEK": 10.256293,
+		"DKK_SEK": 1.376561,
+	}
+
+	// Which currencies do we want to look up?
+	currencies = []string{
+		"NOK",
+		"DKK",
+		"EUR",
+	}
+)
+
 type (
 	stockData struct {
 		name        string
@@ -49,12 +73,6 @@ func main() {
 		fmt.Println("error converting compactToday to int", err.Error())
 	}
 
-	// Which currencies do we want to look up?
-	currencies := []string{
-		"NOK",
-		"DKK",
-		"EUR",
-	}
 	currencyMap := generateCurrencyMap(currencies)
 
 	c.OnHTML(".quoteBar", func(e *colly.HTMLElement) {
@@ -72,22 +90,18 @@ func main() {
 	c.OnHTML(".companyCalendarList", func(e *colly.HTMLElement) {
 		e.ForEach(".companyCalendarItem", func(_ int, el *colly.HTMLElement) {
 			stock := stockData{
-				name:     el.ChildText(".azaLink"),
-				score:    0,
-				price:    0,
-				dividend: 0,
+				name: el.ChildText(".azaLink"),
 			}
 			el.ForEach("ul.companyCalendarItemList li", func(_ int, ul *colly.HTMLElement) {
 
 				// Pick the last day to buy to get dividend
 				if strings.Contains(ul.Text, "Handlas utan utdelning") {
-					r, _ := regexp.Compile(`(?P<date>[0-9]{4}-[0-9]{2}-[0-9]{2})`)
-					match := r.FindStringSubmatch(ul.Text)
+					match := dateRegex.FindStringSubmatch(ul.Text)
 					result := make(map[string]string)
 					if len(match) < 1 {
 						return
 					}
-					for i, name := range r.SubexpNames() {
+					for i, name := range dateRegex.SubexpNames() {
 						if i != 0 && name != "" {
 							result[name] = match[i]
 						}
@@ -104,11 +118,10 @@ func main() {
 
 				// Pick the dividend of the stock
 				if strings.Contains(ul.Text, "Ordinarie utdelning") {
-					r, _ := regexp.Compile(`(?P<sum>[0-9]+,[0-9]+) (?P<curr>[A-Z]+)`)
 					test := strings.TrimSpace(strings.Replace(ul.Text, "Ordinarie utdelning:\n", "", -1))
-					match := r.FindStringSubmatch(test)
+					match := divRegex.FindStringSubmatch(test)
 					result := make(map[string]string)
-					for i, name := range r.SubexpNames() {
+					for i, name := range divRegex.SubexpNames() {
 						if i != 0 && name != "" {
 							result[name] = match[i]
 						}
@@ -133,12 +146,12 @@ func main() {
 					}
 				}
 			})
-			link := fmt.Sprintf("https://www.avanza.se%s", el.ChildAttr("a", "href"))
+			link := baseURL + el.ChildAttr("a", "href")
 			c.Visit(link)
 		})
 	})
 
-	c.Visit("https://www.avanza.se/placera/foretagskalendern/utdelningar.html")
+	c.Visit(baseURL + dividendsPath)
 
 	buildResults()
 
@@ -176,19 +189,14 @@ outputLoop:
 
 func generateCurrencyMap(currencies []string) (currencyMap map[string]float64) {
 	currencyMap = make(map[string]float64)
-	defaultVals := map[string]float64{
-		"NOK_SEK": 1.07517,
-		"EUR_SEK": 10.256293,
-		"DKK_SEK": 1.376561,
-	}
 	for _, v := range currencies {
-		url := fmt.Sprintf("http://free.currencyconverterapi.com/api/v5/convert?q=%s_SEK&compact=y", v)
+		url := fmt.Sprintf(currencyAPIURL, v)
 		resp, err := resty.R().Get(url)
 		if err != nil {
 			fmt.Println("error making resty request to", url, err.Error())
 		}
 		if resp.StatusCode() != 200 {
-			currencyMap = defaultVals
+			currencyMap = defaultCurrencyMap
 			return
 		}
 		t := make(map[string]map[string]float64)
