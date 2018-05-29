@@ -47,14 +47,15 @@ type (
 		currency    string
 		exchange    float64
 		sekprice    float64
+		IPS         float64 // Invested SEK per dividend SEK
 	}
 )
 
-type byScore []stockData
+type byIPS []stockData
 
-func (v byScore) Len() int           { return len(v) }
-func (v byScore) Swap(i, j int)      { v[i], v[j] = v[j], v[i] }
-func (v byScore) Less(i, j int) bool { return v[i].score > v[j].score }
+func (v byIPS) Len() int           { return len(v) }
+func (v byIPS) Swap(i, j int)      { v[i], v[j] = v[j], v[i] }
+func (v byIPS) Less(i, j int) bool { return v[i].IPS < v[j].IPS }
 
 var (
 	StockMap map[string]stockData
@@ -173,16 +174,17 @@ func buildResults() {
 			sekprice:    PriceMap[v.name] * v.exchange,
 		}
 		stock.score = v.score + stock.sekprice
+		stock.IPS = (stock.sekprice / stock.sekdividend)
 		stocks = append(stocks, stock)
 	}
-	sort.Sort(byScore(stocks))
+	sort.Sort(byIPS(stocks))
 	c := 0
 outputLoop:
 	for _, v := range stocks {
 		if c > 4 {
 			break outputLoop
 		}
-		fmt.Printf("Namn:\t\t\t\t %s \nKostar:\t\t\t\t %f.2 \nUtdelning:\t\t\t %f.2 \nAtt investera per utdelad SEK\t %f.2\n\n", v.name, v.sekprice, v.sekdividend, (v.sekprice / v.sekdividend))
+		fmt.Printf("Namn:\t\t\t\t %s \nKostar:\t\t\t\t %f.2 \nUtdelning:\t\t\t %f.2 \nAtt investera per utdelad SEK\t %f.2\n\n", v.name, v.sekprice, v.sekdividend, v.IPS)
 		c++
 	}
 }
