@@ -184,7 +184,7 @@ outputLoop:
 		if c > 4 {
 			break outputLoop
 		}
-		fmt.Printf("Namn:\t\t\t\t %s \nKostar:\t\t\t\t %f.2 \nUtdelning:\t\t\t %f.2 \nAtt investera per utdelad SEK\t %f.2\n\n", v.name, v.sekprice, v.sekdividend, v.IPS)
+		fmt.Printf("Namn:\t\t\t\t %s \nKostar:\t\t\t\t %.2f \nUtdelning:\t\t\t %.2f \nAtt investera per utdelad SEK\t %.2f\n\n", v.name, v.sekprice, v.sekdividend, v.IPS)
 		c++
 	}
 }
